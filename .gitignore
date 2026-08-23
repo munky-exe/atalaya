@@ -1,0 +1,21 @@
+# Entorno — nunca versionar secretos
+.env
+*.local
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Node
+node_modules/
+dist/
+
+# Editores
+.vscode/
+.idea/
+.DS_Store

@@ -36,6 +36,11 @@ class Observation:
     # leer con el segundo intento. Es el caso de expired.badssl.com.
     verify_error: str | None = None
 
+    # Protocolos obsoletos que el servidor todavía acepta, y aquellos que
+    # este build de OpenSSL no pudo comprobar. La distinción es deliberada.
+    legacy_accepted: list[str] = field(default_factory=list)
+    legacy_untestable: list[str] = field(default_factory=list)
+
     # Se llena cuando ni siquiera hubo conexión.
     error: str | None = None
 

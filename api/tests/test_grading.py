@@ -113,3 +113,51 @@ def test_fronteras_de_las_bandas():
     assert score_to_grade(90) == "A"
     assert score_to_grade(89) == "B"
     assert score_to_grade(39) == "F"
+
+
+# --- Detección de protocolos obsoletos -------------------------------------
+#
+# La distinción entre "acepta TLS 1.0" y "no pudimos comprobarlo" es una
+# decisión de producto, no un detalle técnico. Estas pruebas la congelan.
+
+
+def test_aceptar_protocolo_obsoleto_es_critico():
+    verdict = grade(healthy(legacy_accepted=["TLSv1", "TLSv1.1"]))
+    finding = next(f for f in verdict.findings if f.code == "protocol_obsolete")
+    assert finding.severity == "critical"
+    # Deliberadamente no fijamos la letra: acoplar la prueba a la tabla de
+    # castigos la rompe cada vez que se ajusta un número. Lo que importa es
+    # que la nota caiga por debajo de aprobatoria.
+    assert verdict.score < 60
+
+
+def test_el_hallazgo_nombra_los_protocolos():
+    """El usuario tiene que saber cuál desactivar, no solo que hay un problema."""
+    verdict = grade(healthy(legacy_accepted=["TLSv1"]))
+    finding = next(f for f in verdict.findings if f.code == "protocol_obsolete")
+    assert "TLSv1" in finding.title
+
+
+def test_no_comprobable_informa_pero_no_castiga():
+    verdict = grade(healthy(legacy_untestable=["TLSv1", "TLSv1.1"]))
+    assert verdict.score == 100
+    assert verdict.grade == "A"
+    assert "protocol_untested" in [f.code for f in verdict.findings]
+
+
+def test_no_comprobable_no_se_confunde_con_limpio():
+    """Un servidor sin revisar no debe verse igual que uno bien configurado."""
+    limpio = grade(healthy())
+    sin_revisar = grade(healthy(legacy_untestable=["TLSv1"]))
+
+    assert limpio.score == sin_revisar.score  # misma nota
+    assert limpio.findings == []  # pero el limpio no dice nada
+    assert len(sin_revisar.findings) == 1  # y el otro sí avisa
+
+
+def test_aceptado_tiene_prioridad_sobre_no_comprobable():
+    """Si uno se aceptó y otro no se pudo probar, manda la evidencia dura."""
+    verdict = grade(healthy(legacy_accepted=["TLSv1.1"], legacy_untestable=["TLSv1"]))
+    codes = [f.code for f in verdict.findings]
+    assert "protocol_obsolete" in codes
+    assert "protocol_untested" not in codes

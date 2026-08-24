@@ -24,6 +24,7 @@ PENALTIES = {
     "expires_soon": 30,
     "expires_warning": 12,
     "protocol_obsolete": 60,
+    "protocol_untested": 0,
     "protocol_dated": 10,
     "weak_cipher": 25,
     "long_lifetime": 8,
@@ -128,6 +129,25 @@ def grade(obs: Observation) -> Verdict:
                 "La cadena de confianza no valida",
                 obs.verify_error,
             )
+
+    if obs.legacy_accepted:
+        penalise(
+            "protocol_obsolete",
+            "critical",
+            f"Acepta protocolos obsoletos: {', '.join(obs.legacy_accepted)}",
+            "El RFC 8996 los declara fuera de uso. Un navegador antiguo los "
+            "negociaría aunque tu conexión haya usado TLS 1.3.",
+        )
+    elif obs.legacy_untestable:
+        # Castigo cero: informar, no calificar. Decir "limpio" cuando en
+        # realidad no miramos sería peor que no revisar.
+        penalise(
+            "protocol_untested",
+            "low",
+            f"Sin comprobar: {', '.join(obs.legacy_untestable)}",
+            "Este build de OpenSSL no puede negociar esos protocolos, "
+            "así que no podemos confirmar que el servidor los rechace.",
+        )
 
     if obs.protocol in OBSOLETE_PROTOCOLS:
         penalise(

@@ -1,57 +1,139 @@
-import { LifetimeBar } from "./components/LifetimeBar";
-import type { Check } from "./types";
-
-const dia = 86_400_000;
-
-function fake(beforeDays: number, afterDays: number): Check {
-  return {
-    id: 1,
-    observed_at: new Date().toISOString(),
-    score: 100,
-    grade: "A",
-    reachable: true,
-    resolved_ip: null,
-    handshake_ms: null,
-    protocol: "TLSv1.3",
-    cipher: null,
-    cipher_bits: 256,
-    issuer: null,
-    subject: null,
-    not_before: new Date(Date.now() - beforeDays * dia).toISOString(),
-    not_after: new Date(Date.now() + afterDays * dia).toISOString(),
-    findings: [],
-    legacy_accepted: [],
-    legacy_untestable: [],
-    error: null,
-  };
-}
-
-const casos: [string, Check][] = [
-  ["Recién renovado, 90 días", fake(2, 88)],
-  ["A la mitad", fake(45, 45)],
-  ["38 sobre 89 — rutina", fake(51, 38)],
-  ["38 sobre 730 — urgencia", fake(692, 38)],
-  ["Vence en 5 días", fake(85, 5)],
-  ["Vencido hace 3", fake(93, -3)],
-];
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { api, ApiError } from "./lib/api";
+import type { Domain } from "./types";
+import { AddDomain } from "./components/AddDomain";
+import { DomainCard } from "./components/DomainCard";
 
 export default function App() {
-  return (
-    <div className="min-h-screen p-10">
-      <h1 className="text-2xl font-bold tracking-tight">Barra de vida</h1>
-      <p className="mt-2 max-w-md text-[13px] text-muted">
-        Compara los casos tres y cuatro: mismos días restantes, urgencia
-        distinta. Eso es lo que un número solo no puede decir.
-      </p>
+  const [domains, setDomains] = useState<Domain[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-      <div className="mt-8 grid max-w-3xl gap-5 sm:grid-cols-2">
-        {casos.map(([titulo, check]) => (
-          <div key={titulo} className="rounded-lg border border-line bg-surface p-4">
-            <p className="mb-3 font-mono text-[11px] text-muted">{titulo}</p>
-            <LifetimeBar check={check} />
+  const load = useCallback(async () => {
+    try {
+      setDomains(await api.listDomains());
+      setError(null);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "No se pudo cargar la lista.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  // Cada accion actualiza el estado local con lo que devolvio la API, en
+  // lugar de recargar la lista completa. Menos peticiones y sin parpadeo.
+  const addDomain = async (hostname: string) => {
+    const created = await api.addDomain(hostname);
+    setDomains((current) => [...current, created].sort(byHostname));
+  };
+
+  const recheck = async (id: number) => {
+    const check = await api.checkNow(id);
+    setDomains((current) => current.map((d) => (d.id === id ? { ...d, latest: check } : d)));
+  };
+
+  const remove = async (id: number) => {
+    await api.remove(id);
+    setDomains((current) => current.filter((d) => d.id !== id));
+  };
+
+  const summary = useMemo(() => {
+    const checked = domains.filter((d) => d.latest);
+    const failing = checked.filter((d) => ["D", "E", "F"].includes(d.latest!.grade)).length;
+    const expiring = checked.filter((d) => {
+      const notAfter = d.latest!.not_after;
+      if (!notAfter) return false;
+      const days = (new Date(notAfter).getTime() - Date.now()) / 86400000;
+      return days >= 0 && days < 30;
+    }).length;
+    return { total: domains.length, failing, expiring };
+  }, [domains]);
+
+  return (
+    <div className="min-h-screen">
+      <header className="horizon relative border-b border-line">
+        <div className="mx-auto max-w-6xl px-5 pb-8 pt-12">
+          <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-faint">
+            Postura TLS
+          </p>
+          <h1 className="mt-2 text-[38px] font-bold leading-none tracking-tight">Atalaya</h1>
+          <p className="mt-3 max-w-lg text-[14px] leading-relaxed text-muted">
+            Vigila el certificado y la configuracion de transporte de tus dominios.
+            Sabe cuanto les queda de vida, no solo si responden.
+          </p>
+
+          <div className="mt-7 flex flex-wrap items-end justify-between gap-5">
+            <AddDomain onAdd={addDomain} disabled={loading} />
+            <dl className="flex gap-6 font-mono text-[11px]">
+              <Metric label="Vigilados" value={summary.total} />
+              <Metric label="Por vencer" value={summary.expiring} tone="warm" />
+              <Metric label="Reprobados" value={summary.failing} tone="fail" />
+            </dl>
           </div>
-        ))}
-      </div>
+        </div>
+      </header>
+
+      <main className="mx-auto max-w-6xl px-5 py-8">
+        {error && (
+          <p
+            className="rounded-md border border-line bg-surface p-4 text-[13px]"
+            style={{ color: "var(--color-fail)" }}
+            role="alert"
+          >
+            {error}
+          </p>
+        )}
+
+        {loading && !error && <p className="text-[13px] text-faint">Cargando...</p>}
+
+        {!loading && !error && domains.length === 0 && (
+          <div className="rounded-lg border border-dashed border-line p-10 text-center">
+            <p className="text-[14px] text-muted">Aun no vigilas ningun dominio.</p>
+            <p className="mt-1 text-[13px] text-faint">
+              Escribe uno arriba y lo reviso de inmediato.
+            </p>
+          </div>
+        )}
+
+        <div className="grid items-start gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {domains.map((domain) => (
+            <DomainCard
+              key={domain.id}
+              domain={domain}
+              onRecheck={recheck}
+              onRemove={remove}
+            />
+          ))}
+        </div>
+      </main>
+
+      <footer className="mx-auto max-w-6xl px-5 pb-10">
+        <p className="border-t border-line pt-5 font-mono text-[11px] text-faint">
+          Los chequeos son pasivos: un handshake TLS por dominio, nada intrusivo.
+        </p>
+      </footer>
     </div>
   );
+}
+
+function Metric({ label, value, tone }: { label: string; value: number; tone?: string }) {
+  return (
+    <div>
+      <dt className="text-[10px] uppercase tracking-wider text-faint">{label}</dt>
+      <dd
+        className="tnum mt-1 text-[20px] font-bold leading-none"
+        style={tone && value > 0 ? { color: `var(--color-${tone})` } : undefined}
+      >
+        {value}
+      </dd>
+    </div>
+  );
+}
+
+function byHostname(a: Domain, b: Domain) {
+  return a.hostname.localeCompare(b.hostname);
 }

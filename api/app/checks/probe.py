@@ -20,6 +20,17 @@ from cryptography.x509.oid import ExtensionOID
 
 from app.checks.models import Observation
 
+# Python en macOS no usa el llavero del sistema, sino el paquete de raíces
+# de OpenSSL. Eso hace que sitios perfectamente válidos —gob.mx, unam.mx—
+# aparezcan con la cadena rota. truststore delega la verificación al almacén
+# nativo del sistema operativo, que es lo que hace un navegador.
+try:
+    import truststore
+
+    truststore.inject_into_ssl()
+except ImportError:  # pragma: no cover
+    pass
+
 DEFAULT_TIMEOUT = 8.0
 
 
@@ -44,7 +55,7 @@ def probe(hostname: str, port: int = 443, timeout: float = DEFAULT_TIMEOUT) -> O
 
     # Solo tiene sentido si el servidor responde. Añade dos handshakes más.
     if obs.reachable:
-        obs.legacy_accepted, obs.legacy_untestable = detect_legacy(hostname, port, timeout / 2)
+        obs.legacy_accepted, obs.legacy_untestable = detect_legacy(hostname, port, 2.5)
 
     return obs
 
@@ -61,6 +72,10 @@ def _handshake(obs: Observation, context: ssl.SSLContext, timeout: float) -> Non
     with socket.create_connection((obs.hostname, obs.port), timeout=timeout) as raw:
         obs.reachable = True
         obs.resolved_ip = raw.getpeername()[0]
+        # create_connection solo limita el establecimiento TCP. Sin esto un
+        # servidor que acepta y luego calla deja el handshake colgado sin
+        # limite: unam.mx tardo 64 segundos antes de este ajuste.
+        raw.settimeout(timeout)
 
         with context.wrap_socket(raw, server_hostname=obs.hostname) as tls:
             obs.protocol = tls.version()
@@ -108,7 +123,7 @@ LEGACY_PROTOCOLS = {
 
 
 def detect_legacy(
-    hostname: str, port: int = 443, timeout: float = 4.0
+    hostname: str, port: int = 443, timeout: float = 2.5
 ) -> tuple[list[str], list[str]]:
     """Protocolos obsoletos que el servidor acepta.
 

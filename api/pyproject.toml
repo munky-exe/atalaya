@@ -1,2 +1,4 @@
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# Permite escribir pruebas async sin decorar cada una con @pytest.mark.asyncio
+asyncio_mode = "auto"

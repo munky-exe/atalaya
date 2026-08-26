@@ -1,0 +1,24 @@
+# Por ahora solo la base de datos. La API y el frontend se suman después.
+
+name: atalaya
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-atalaya}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-atalaya}
+      POSTGRES_DB: ${POSTGRES_DB:-atalaya}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-atalaya} -d ${POSTGRES_DB:-atalaya}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  pgdata:

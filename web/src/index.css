@@ -1,0 +1,83 @@
+@import "tailwindcss";
+
+/* ---------------------------------------------------------------------------
+   Tokens
+
+   Panel de instrumentos, no terminal de hacker. La base es un gris azulado
+   frío en vez de negro puro: mantiene legibles los colores de estado en vez
+   de hacerlos brillar.
+
+   El color está reservado para significar. Ninguno de estos valores se usa
+   decorativamente: cada uno codifica un estado del certificado.
+--------------------------------------------------------------------------- */
+
+/* `static` fuerza a emitir TODAS las variables, no solo las que Tailwind
+   detecta usadas como clase. Las de estado se consumen dentro de
+   `var(--color-${tone})` en JS, que el escáner no puede ver: sin esto se
+   omiten del CSS y los colores simplemente no aparecen. */
+@theme static {
+  --color-base: #0b0e13;
+  --color-surface: #12161d;
+  --color-raised: #181d26;
+  --color-line: #232a35;
+  --color-line-bright: #333d4c;
+
+  --color-text: #e6e9ef;
+  --color-muted: #8b95a5;
+  --color-faint: #5a6474;
+
+  /* Rampa de temperatura: frío = tiempo de sobra, cálido = actuar ya. */
+  --color-cool: #4cc9b0;
+  --color-mild: #6ea8fe;
+  --color-warm: #e6b450;
+  --color-hot: #e8794b;
+  --color-fail: #e5534b;
+
+  --font-display: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", monospace;
+}
+
+html {
+  background: var(--color-base);
+  color-scheme: dark;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-display);
+  background: var(--color-base);
+  color: var(--color-text);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Un solo gesto ambiental: el resplandor de un horizonte visto desde una
+   torre de vigilancia. Un efecto, usado una vez. */
+.horizon::before {
+  content: "";
+  position: absolute;
+  inset: -40% 0 auto 0;
+  height: 420px;
+  background: radial-gradient(
+    ellipse 60% 100% at 50% 100%,
+    rgba(110, 168, 254, 0.09),
+    transparent 70%
+  );
+  pointer-events: none;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-mild);
+  outline-offset: 2px;
+}
+
+/* Cifras tabulares donde se comparan números en vertical. */
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition-duration: 0.01ms !important;
+    animation: none !important;
+  }
+}

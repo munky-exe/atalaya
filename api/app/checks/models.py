@@ -8,7 +8,7 @@ a nada.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 
 @dataclass
@@ -48,7 +48,7 @@ class Observation:
     def days_remaining(self) -> int | None:
         if self.not_after is None:
             return None
-        return (self.not_after - datetime.now(timezone.utc)).days
+        return (self.not_after - datetime.now(UTC)).days
 
     @property
     def lifetime_days(self) -> int | None:

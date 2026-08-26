@@ -5,7 +5,7 @@ decisiones de modelado: las restricciones, el borrado en cascada, el orden
 del historial. Son las reglas que decidimos nosotros.
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from sqlalchemy import func, select
@@ -14,7 +14,7 @@ from sqlalchemy.orm import selectinload
 
 from app.models import Check, Domain
 
-NOW = datetime.now(timezone.utc)
+NOW = datetime.now(UTC)
 
 
 def make_check(domain_id: int, grade: str = "A", score: int = 100, **extra) -> Check:
@@ -139,13 +139,13 @@ async def test_el_instante_de_vencimiento_se_conserva(session):
     session.add(domain)
     await session.commit()
 
-    vence = datetime(2026, 9, 30, 23, 59, 59, tzinfo=timezone.utc)
+    vence = datetime(2026, 9, 30, 23, 59, 59, tzinfo=UTC)
     session.add(make_check(domain.id, not_after=vence))
     await session.commit()
 
     check = (await session.execute(select(Check))).scalar_one()
     guardado = check.not_after
     if guardado.tzinfo is None:
-        guardado = guardado.replace(tzinfo=timezone.utc)
+        guardado = guardado.replace(tzinfo=UTC)
 
     assert guardado == vence

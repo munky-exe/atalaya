@@ -6,9 +6,9 @@ base de datos alcanzable ni siquiera el driver instalado — y es lo que va
 a permitir que las pruebas corran contra SQLite en memoria más adelante.
 """
 
+import os
 from collections.abc import AsyncGenerator
 from functools import lru_cache
-import os
 
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,

@@ -7,12 +7,12 @@ Cada prueba nombra la situación real que describe, no la función que llama.
 Si una falla, el nombre debe decirte qué caso del mundo se rompió.
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from app.checks.grading import grade, score_to_grade
 from app.checks.models import Observation
 
-NOW = datetime.now(timezone.utc)
+NOW = datetime.now(UTC)
 
 
 def healthy(**overrides) -> Observation:

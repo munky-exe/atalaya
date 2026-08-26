@@ -9,7 +9,7 @@ internet: fallarían por razones ajenas al código, y las pruebas que fallan
 sin culpa son las que la gente deja de correr.
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 import pytest_asyncio
@@ -20,7 +20,7 @@ from app.checks.models import Observation
 from app.db import get_session
 from app.models import Base
 
-NOW = datetime.now(timezone.utc)
+NOW = datetime.now(UTC)
 
 
 def fake_probe(hostname: str, port: int = 443, timeout: float = 8.0) -> Observation:

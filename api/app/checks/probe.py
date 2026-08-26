@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import socket
 import ssl
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from cryptography import x509
 from cryptography.x509.oid import ExtensionOID
@@ -25,7 +25,7 @@ DEFAULT_TIMEOUT = 8.0
 
 def probe(hostname: str, port: int = 443, timeout: float = DEFAULT_TIMEOUT) -> Observation:
     obs = Observation(hostname=hostname, port=port)
-    started = datetime.now(timezone.utc)
+    started = datetime.now(UTC)
 
     try:
         _handshake(obs, ssl.create_default_context(), timeout)
@@ -40,7 +40,7 @@ def probe(hostname: str, port: int = 443, timeout: float = DEFAULT_TIMEOUT) -> O
         # Ni siquiera hubo conexión: DNS, timeout, puerto cerrado.
         obs.error = f"{type(exc).__name__}: {exc}"
 
-    obs.handshake_ms = int((datetime.now(timezone.utc) - started).total_seconds() * 1000)
+    obs.handshake_ms = int((datetime.now(UTC) - started).total_seconds() * 1000)
 
     # Solo tiene sentido si el servidor responde. Añade dos handshakes más.
     if obs.reachable:
@@ -136,9 +136,11 @@ def detect_legacy(
             continue
 
         try:
-            with socket.create_connection((hostname, port), timeout=timeout) as raw:
-                with context.wrap_socket(raw, server_hostname=hostname):
-                    accepted.append(name)
+            with (
+                socket.create_connection((hostname, port), timeout=timeout) as raw,
+                context.wrap_socket(raw, server_hostname=hostname),
+            ):
+                accepted.append(name)
         except ssl.SSLError:
             # El servidor lo rechazó. Es el resultado que queremos.
             continue

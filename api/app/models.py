@@ -47,7 +47,7 @@ class Domain(Base):
         DateTime(timezone=True), server_default=func.now()
     )
 
-    checks: Mapped[list["Check"]] = relationship(
+    checks: Mapped[list[Check]] = relationship(
         back_populates="domain",
         cascade="all, delete-orphan",
         order_by="Check.observed_at.desc()",

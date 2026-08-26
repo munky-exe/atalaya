@@ -2,3 +2,17 @@
 testpaths = ["tests"]
 # Permite escribir pruebas async sin decorar cada una con @pytest.mark.asyncio
 asyncio_mode = "auto"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+# E/F: errores y estilo básico. I: orden de imports. UP: sintaxis moderna.
+# B: bugs comunes. SIM: simplificaciones. ASYNC: errores propios de async.
+select = ["E", "F", "I", "UP", "B", "SIM", "ASYNC"]
+# FastAPI documenta Depends() en los valores por defecto; B008 lo marcaría.
+ignore = ["B008"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["E501"]

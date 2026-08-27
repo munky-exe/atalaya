@@ -67,16 +67,18 @@ def probe(  # pragma: no cover - E/S de red, se ejercita a mano no en CI
         # Ni siquiera hubo conexion: DNS, timeout, puerto cerrado.
         obs.error = f"{type(exc).__name__}: {exc}"
 
-    # Solo tiene sentido si el servidor responde. Anade dos handshakes mas,
-    # asi que se omite cuando el sondeo principal ya consumio demasiado
-    # tiempo: un servidor lento no merece 5 segundos extra de espera del
-    # usuario, y "no comprobado" es una respuesta honesta.
-        elapsed = (datetime.now(UTC) - started).total_seconds()
+    # La deteccion de protocolos obsoletos anade dos handshakes mas, asi que
+    # se omite cuando el sondeo principal ya consumio demasiado tiempo: un
+    # servidor lento no merece cinco segundos extra de espera del usuario.
+    elapsed = (datetime.now(UTC) - started).total_seconds()
     if obs.reachable and elapsed < LEGACY_BUDGET:
         obs.legacy_accepted, obs.legacy_untestable = detect_legacy(hostname, port, 2.5)
     elif obs.reachable:
         # No es que OpenSSL no pueda: es que nos rendimos por tiempo.
         obs.legacy_skipped = True
+
+    obs.handshake_ms = int((datetime.now(UTC) - started).total_seconds() * 1000)
+    return obs
 
 
 def _lax_context() -> ssl.SSLContext:
@@ -93,9 +95,10 @@ def _handshake(  # pragma: no cover - E/S de red
     with socket.create_connection((obs.hostname, obs.port), timeout=timeout) as raw:
         obs.reachable = True
         obs.resolved_ip = raw.getpeername()[0]
-        # create_connection solo limita el establecimiento TCP. Sin esto un
-        # servidor que acepta y luego calla deja el handshake colgado sin
-        # limite: unam.mx tardo 64 segundos antes de este ajuste.
+        # create_connection solo limita el establecimiento TCP, y settimeout
+        # aplica por operacion, no al total: un servidor que responde justo
+        # antes de cada limite estira el handshake sin activarlo nunca.
+        # unam.mx llegaba a 32 segundos con el timeout completo.
         raw.settimeout(timeout / 3)
 
         with context.wrap_socket(raw, server_hostname=obs.hostname) as tls:

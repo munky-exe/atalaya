@@ -1,10 +1,9 @@
-"""Calificación de postura TLS.
+"""Calificacion de postura TLS.
 
-Función pura: recibe una Observation, devuelve un veredicto. No toca la red,
-no lee el reloj más allá de lo que ya calculó la Observation, y da siempre
-el mismo resultado para la misma entrada.
+Funcion pura: recibe una Observation, devuelve un veredicto. No toca la red
+y da siempre el mismo resultado para la misma entrada.
 
-Por eso se puede probar entera sin conexión.
+Por eso se puede probar entera sin conexion.
 """
 
 from __future__ import annotations
@@ -25,6 +24,7 @@ PENALTIES = {
     "expires_warning": 12,
     "protocol_obsolete": 60,
     "protocol_untested": 0,
+    "protocol_skipped": 0,
     "protocol_dated": 10,
     "weak_cipher": 25,
     "long_lifetime": 8,
@@ -69,13 +69,13 @@ def grade(obs: Observation) -> Verdict:
         score -= PENALTIES[code]
         findings.append(Finding(code, severity, title, detail))
 
-    # Si no hubo conexión, nada más tiene sentido reportar.
+    # Si no hubo conexion, nada mas tiene sentido reportar.
     if not obs.reachable:
         penalise(
             "unreachable",
             "critical",
             "No responde en el puerto TLS",
-            obs.error or "No se pudo establecer conexión.",
+            obs.error or "No se pudo establecer conexion.",
         )
         return Verdict(score=0, grade="F", findings=findings)
 
@@ -87,28 +87,28 @@ def grade(obs: Observation) -> Verdict:
                 "cert_expired",
                 "critical",
                 "Certificado vencido",
-                f"Venció hace {abs(days)} días. Los navegadores bloquean el acceso.",
+                f"Vencio hace {abs(days)} dias. Los navegadores bloquean el acceso.",
             )
         elif days < 7:
             penalise(
                 "expires_critical",
                 "critical",
                 "Vence esta semana",
-                f"Quedan {days} días. Renueva ahora.",
+                f"Quedan {days} dias. Renueva ahora.",
             )
         elif days < 15:
             penalise(
                 "expires_soon",
                 "high",
                 "Vence en menos de dos semanas",
-                f"Quedan {days} días.",
+                f"Quedan {days} dias.",
             )
         elif days < 30:
             penalise(
                 "expires_warning",
                 "medium",
                 "Vence este mes",
-                f"Quedan {days} días.",
+                f"Quedan {days} dias.",
             )
 
     if obs.verify_error:
@@ -121,8 +121,8 @@ def grade(obs: Observation) -> Verdict:
                 obs.verify_error,
             )
         elif days is None or days >= 0:
-            # Un certificado vencido ya falló la verificación: no castigar dos
-            # veces el mismo problema.
+            # Un certificado vencido ya fallo la verificacion: no castigar
+            # dos veces el mismo problema.
             penalise(
                 "verify_failed",
                 "critical",
@@ -130,23 +130,31 @@ def grade(obs: Observation) -> Verdict:
                 obs.verify_error,
             )
 
+    # Tres estados distintos, tres mensajes distintos. Confundirlos daria
+    # falsa tranquilidad o culparia al servidor de una limitacion nuestra.
     if obs.legacy_accepted:
         penalise(
             "protocol_obsolete",
             "critical",
             f"Acepta protocolos obsoletos: {', '.join(obs.legacy_accepted)}",
             "El RFC 8996 los declara fuera de uso. Un navegador antiguo los "
-            "negociaría aunque tu conexión haya usado TLS 1.3.",
+            "negociaria aunque tu conexion haya usado TLS 1.3.",
+        )
+    elif obs.legacy_skipped:
+        penalise(
+            "protocol_skipped",
+            "low",
+            "Sin comprobar: el sondeo tardo demasiado",
+            "Este servidor respondio muy lento, asi que omitimos la prueba de "
+            "TLS 1.0 y 1.1 en lugar de hacerte esperar mas.",
         )
     elif obs.legacy_untestable:
-        # Castigo cero: informar, no calificar. Decir "limpio" cuando en
-        # realidad no miramos sería peor que no revisar.
         penalise(
             "protocol_untested",
             "low",
             f"Sin comprobar: {', '.join(obs.legacy_untestable)}",
             "Este build de OpenSSL no puede negociar esos protocolos, "
-            "así que no podemos confirmar que el servidor los rechace.",
+            "asi que no podemos confirmar que el servidor los rechace.",
         )
 
     if obs.protocol in OBSOLETE_PROTOCOLS:
@@ -161,23 +169,23 @@ def grade(obs: Observation) -> Verdict:
             "protocol_dated",
             "low",
             "Sin TLS 1.3",
-            "La conexión negoció TLS 1.2. TLS 1.3 es más rápido y más seguro.",
+            "La conexion negocio TLS 1.2. TLS 1.3 es mas rapido y mas seguro.",
         )
 
     if obs.cipher_bits is not None and obs.cipher_bits < 128:
         penalise(
             "weak_cipher",
             "high",
-            f"Cifrador débil: {obs.cipher}",
-            f"Negoció {obs.cipher_bits} bits. El mínimo aceptable es 128.",
+            f"Cifrador debil: {obs.cipher}",
+            f"Negocio {obs.cipher_bits} bits. El minimo aceptable es 128.",
         )
 
     if obs.lifetime_days is not None and obs.lifetime_days > 398:
         penalise(
             "long_lifetime",
             "low",
-            "Vigencia superior a 398 días",
-            "Las CA públicas ya no emiten certificados tan largos.",
+            "Vigencia superior a 398 dias",
+            "Las CA publicas ya no emiten certificados tan largos.",
         )
 
     score = max(0, min(100, score))

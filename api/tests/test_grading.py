@@ -161,3 +161,27 @@ def test_aceptado_tiene_prioridad_sobre_no_comprobable():
     codes = [f.code for f in verdict.findings]
     assert "protocol_obsolete" in codes
     assert "protocol_untested" not in codes
+
+
+def test_omitido_por_tiempo_no_se_confunde_con_no_comprobable():
+    """Rendirse por lentitud y no poder comprobar son cosas distintas.
+
+    Si las mezclaramos, un servidor lento apareceria culpado de una
+    limitacion que es nuestra.
+    """
+    lento = grade(healthy(legacy_skipped=True))
+    incapaz = grade(healthy(legacy_untestable=["TLSv1"]))
+
+    assert [f.code for f in lento.findings] == ["protocol_skipped"]
+    assert [f.code for f in incapaz.findings] == ["protocol_untested"]
+    assert lento.score == incapaz.score == 100
+
+
+def test_evidencia_dura_gana_sobre_ambos_sin_comprobar():
+    verdict = grade(
+        healthy(legacy_accepted=["TLSv1.1"], legacy_skipped=True, legacy_untestable=["TLSv1"])
+    )
+    codes = [f.code for f in verdict.findings]
+    assert "protocol_obsolete" in codes
+    assert "protocol_skipped" not in codes
+    assert "protocol_untested" not in codes

@@ -1,6 +1,6 @@
 """Estructuras de datos del chequeo TLS.
 
-Aquí no hay lógica ni red: solo la forma que tienen los datos. Separarlo
+Aqui no hay logica ni red: solo la forma que tienen los datos. Separarlo
 permite que las pruebas construyan una Observation a mano, sin conectarse
 a nada.
 """
@@ -32,16 +32,20 @@ class Observation:
     not_before: datetime | None = None
     not_after: datetime | None = None
 
-    # Se llena cuando la verificación falló pero el certificado sí se pudo
+    # Se llena cuando la verificacion fallo pero el certificado si se pudo
     # leer con el segundo intento. Es el caso de expired.badssl.com.
     verify_error: str | None = None
 
-    # Protocolos obsoletos que el servidor todavía acepta, y aquellos que
-    # este build de OpenSSL no pudo comprobar. La distinción es deliberada.
+    # Protocolos obsoletos que el servidor todavia acepta, y aquellos que
+    # este build de OpenSSL no pudo comprobar. La distincion es deliberada.
     legacy_accepted: list[str] = field(default_factory=list)
     legacy_untestable: list[str] = field(default_factory=list)
 
-    # Se llena cuando ni siquiera hubo conexión.
+    # Distinto de legacy_untestable: aqui si podiamos comprobar, pero el
+    # sondeo principal ya tardo demasiado y no gastamos dos handshakes mas.
+    legacy_skipped: bool = False
+
+    # Se llena cuando ni siquiera hubo conexion.
     error: str | None = None
 
     @property
@@ -52,8 +56,8 @@ class Observation:
 
     @property
     def lifetime_days(self) -> int | None:
-        """Ventana completa de vigencia. Es lo que da contexto a los días
-        restantes: 38 días sobre 89 es normal; sobre 730 sería alarmante."""
+        """Ventana completa de vigencia. Es lo que da contexto a los dias
+        restantes: 38 dias sobre 89 es normal; sobre 730 seria alarmante."""
         if self.not_after is None or self.not_before is None:
             return None
         return (self.not_after - self.not_before).days

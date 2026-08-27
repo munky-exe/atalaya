@@ -53,3 +53,29 @@ jobs:
       - name: Compilar
         working-directory: web
         run: npm run build
+
+  images:
+    name: Imagenes Docker
+    runs-on: ubuntu-latest
+    needs: [api, web]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+
+      # Construir sin publicar: comprueba que el Dockerfile realmente
+      # funciona, que es la mitad de los "funciona en mi maquina".
+      - name: API
+        uses: docker/build-push-action@v6
+        with:
+          context: ./api
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Frontend
+        uses: docker/build-push-action@v6
+        with:
+          context: ./web
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

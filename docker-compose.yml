@@ -1,4 +1,9 @@
-# Por ahora solo la base de datos. La API y el frontend se suman después.
+# Las tres piezas con un comando: docker compose up
+#
+# Lo importante aqui son los healthchecks combinados con
+# "condition: service_healthy". Sin ellos, Compose arranca la API en cuanto
+# el contenedor de Postgres existe, varios segundos antes de que acepte
+# conexiones: es el clasico bug de "funciona al segundo up".
 
 name: atalaya
 
@@ -18,6 +23,32 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+    restart: unless-stopped
+
+  api:
+    build:
+      context: ./api
+      target: runtime
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-atalaya}:${POSTGRES_PASSWORD:-atalaya}@db:5432/${POSTGRES_DB:-atalaya}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8080,http://localhost:5173}
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "${API_PORT:-8000}:8000"
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ./web
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:8000}
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "${WEB_PORT:-8080}:80"
     restart: unless-stopped
 
 volumes:

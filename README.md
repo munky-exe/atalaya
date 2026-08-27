@@ -1,5 +1,7 @@
 # Atalaya
 
+[![CI](https://github.com/munky-exe/atalaya/actions/workflows/ci.yml/badge.svg)](https://github.com/munky-exe/atalaya/actions/workflows/ci.yml)
+
 Vigila la postura TLS de tus dominios, no solo si responden.
 
 Un monitor de uptime te dice que el sitio está arriba. Atalaya te dice que el

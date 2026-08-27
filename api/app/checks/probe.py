@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import socket
 import ssl
+import time
 from datetime import UTC, datetime
 
 from cryptography import x509
@@ -92,14 +93,14 @@ def _handshake(  # pragma: no cover - E/S de red
     obs: Observation, context: ssl.SSLContext, timeout: float
 ) -> None:
     """Un handshake. Llena obs con lo que se vea. Deja escapar las excepciones."""
-    with socket.create_connection((obs.hostname, obs.port), timeout=timeout) as raw:
+    with _connect(obs.hostname, obs.port, timeout) as raw:
         obs.reachable = True
         obs.resolved_ip = raw.getpeername()[0]
         # create_connection solo limita el establecimiento TCP, y settimeout
         # aplica por operacion, no al total: un servidor que responde justo
         # antes de cada limite estira el handshake sin activarlo nunca.
         # unam.mx llegaba a 32 segundos con el timeout completo.
-        raw.settimeout(timeout / 3)
+        raw.settimeout(timeout)
 
         with context.wrap_socket(raw, server_hostname=obs.hostname) as tls:
             obs.protocol = tls.version()
@@ -166,7 +167,7 @@ def detect_legacy(  # pragma: no cover - E/S de red
 
         try:
             with (
-                socket.create_connection((hostname, port), timeout=timeout) as raw,
+                _connect(hostname, port, timeout) as raw,
                 context.wrap_socket(raw, server_hostname=hostname),
             ):
                 accepted.append(name)
@@ -178,3 +179,56 @@ def detect_legacy(  # pragma: no cover - E/S de red
             untestable.append(name)
 
     return accepted, untestable
+
+
+def _connect(hostname: str, port: int, budget: float) -> socket.socket:  # pragma: no cover
+    """Conecta respetando un presupuesto TOTAL de tiempo.
+
+    socket.create_connection aplica su timeout a CADA direccion resuelta, no
+    al conjunto. Un host con cuatro IPs inalcanzables consume timeout x 4:
+    unam.mx publica varias IPv6 que esta red no alcanza y tardaba 32 segundos
+    con un timeout nominal de 8.
+    """
+    deadline = time.monotonic() + budget
+    infos = _interleave(socket.getaddrinfo(hostname, port, type=socket.SOCK_STREAM))
+    last: OSError | None = None
+
+    for family, socktype, proto, _, address in infos:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            break
+
+        sock = socket.socket(family, socktype, proto)
+        # Reparte lo que queda: dos direcciones pendientes no deben poder
+        # gastar el presupuesto completo cada una.
+        sock.settimeout(min(remaining, budget / 2))
+        try:
+            sock.connect(address)
+            return sock
+        except OSError as exc:
+            sock.close()
+            last = exc
+
+    raise last or TimeoutError(f"Sin conexion a {hostname}:{port} en {budget}s")
+
+
+def _interleave(infos: list) -> list:  # pragma: no cover
+    """Alterna IPv6 e IPv4 en lugar de agotar una familia antes de la otra.
+
+    getaddrinfo suele devolver todas las IPv6 primero. Si esta red no las
+    alcanza, se gasta el presupuesto completo antes de tocar una sola IPv4.
+    unam.mx publica cuatro de cada una y ese era exactamente el caso.
+
+    Es la idea de Happy Eyeballs (RFC 8305) sin la parte concurrente: los
+    navegadores prueban ambas familias casi a la vez, por eso abren el sitio
+    al instante donde este codigo tardaba 32 segundos.
+    """
+    v6 = [i for i in infos if i[0] == socket.AF_INET6]
+    v4 = [i for i in infos if i[0] != socket.AF_INET6]
+
+    mixed = []
+    for pair in zip(v6, v4, strict=False):
+        mixed.extend(pair)
+    mixed.extend(v6[len(v4) :])
+    mixed.extend(v4[len(v6) :])
+    return mixed
